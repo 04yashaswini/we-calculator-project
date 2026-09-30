@@ -1,0 +1,69 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Web Calculator</title>
+<style>
+:root{--p:#ff5c8a;--o:#ff9a4d;--c:#fff6e9;--i:#3b2a2f;--g:linear-gradient(135deg,var(--p),var(--o))}
+*{box-sizing:border-box;margin:0;font-family:system-ui,sans-serif}
+body{background:radial-gradient(circle at 8% 0,#ffd6e2,transparent 40%),radial-gradient(circle at 92% 8%,#ffe0c2,transparent 40%),var(--c);color:var(--i);min-height:100vh;display:grid;place-items:center;padding:16px}
+.app{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;width:100%}
+.card{background:#fffc;backdrop-filter:blur(10px);border:1px solid #fff;border-radius:26px;padding:20px;box-shadow:0 14px 40px #ff5c8a2e}
+.calc{width:min(100%,340px)}.hist{width:min(100%,260px)}
+.t{background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent}
+.disp{background:#fff;border-radius:18px;padding:14px 18px;text-align:right;margin-bottom:16px;box-shadow:inset 0 2px 8px #ff5c8a1a}
+.disp small{color:#9a7b76;display:block;min-height:1.2em}.num{font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.keys button{border:0;border-radius:16px;padding:16px 0;font-size:1.2rem;font-weight:600;cursor:pointer;background:#fff;color:var(--i);box-shadow:0 4px 10px #ff5c8a1f;transition:.12s}
+.keys button:hover{transform:translateY(-2px)}.keys button:active{transform:scale(.94)}
+.keys .fn{background:#ffe3d1;color:#d9531e}
+.keys .op{background:var(--g);color:#fff}
+.keys .eq{background:linear-gradient(135deg,var(--o),var(--p));color:#fff}
+.hist p{padding:8px 0;border-bottom:1px dashed #ffd3bd;font-size:.9rem;word-break:break-all}
+.hist button{margin-top:12px;border:0;background:#ffe3d1;color:#d9531e;padding:8px 14px;border-radius:12px;cursor:pointer;font-weight:600}
+</style></head><body>
+<div id="root" style="width:100%"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const h = React.createElement, init = { cur: '0', prev: null, op: null, fresh: false, hist: [] };
+const K = ['AC','±','%','÷','7','8','9','×','4','5','6','−','1','2','3','+','⌫','0','.','='];
+const fmt = n => isFinite(n) ? String(+n.toPrecision(12)) : 'Error';
+const calc = (a, b, o) => ({ '+': a + b, '−': a - b, '×': a * b, '÷': b ? a / b : NaN })[o];
+
+function step(s, k) {
+  if (k == 'CH') return { ...s, hist: [] };
+  if (k == 'AC') return { ...init, hist: s.hist };
+  if (s.cur == 'Error') { if (!/[\d.]/.test(k)) return s; s = { ...init, hist: s.hist }; }
+  const { cur, prev, op, fresh, hist } = s, n = +cur;
+  if (/\d/.test(k)) return { ...s, fresh: false, cur: fresh || cur == '0' ? k : cur.length < 15 ? cur + k : cur };
+  if (k == '.') return fresh ? { ...s, cur: '0.', fresh: false } : cur.includes('.') ? s : { ...s, cur: cur + '.' };
+  if (k == '⌫') return fresh ? s : { ...s, cur: cur.length > 1 && !(cur.length == 2 && cur[0] == '-') ? cur.slice(0, -1) : '0' };
+  if (k == '±') return n ? { ...s, cur: String(-n) } : s;
+  if (k == '%') return { ...s, cur: fmt(n / 100), fresh: true };
+  if (k == '=') {
+    if (!op) return s;
+    const r = fmt(calc(prev, n, op));
+    return { cur: r, prev: null, op: null, fresh: true, hist: [`${prev} ${op} ${cur} = ${r}`, ...hist].slice(0, 8) };
+  }
+  const v = op && !fresh ? fmt(calc(prev, n, op)) : cur;   // chained operations
+  return { ...s, cur: v, prev: +v, op: k, fresh: true };
+}
+
+function App() {
+  const [s, d] = React.useReducer(step, init);
+  React.useEffect(() => {
+    const m = { '-': '−', '*': '×', '/': '÷', Enter: '=', Backspace: '⌫', Escape: 'AC' };
+    const f = e => { const k = m[e.key] || e.key; if (K.includes(k)) { e.preventDefault(); d(k); } };
+    addEventListener('keydown', f); return () => removeEventListener('keydown', f);
+  }, []);
+  const cls = k => '÷×−+'.includes(k) ? 'op' : k == '=' ? 'eq' : 'AC±%⌫'.includes(k) ? 'fn' : '';
+  return h('div', { className: 'app' },
+    h('div', { className: 'card calc' },
+      h('div', { className: 'disp' },
+        h('small', null, s.op && s.cur != 'Error' ? `${s.prev} ${s.op}` : ''),
+        h('div', { className: 'num t', style: { fontSize: s.cur.length > 10 ? '1.6rem' : '2.6rem' } }, s.cur)),
+      h('div', { className: 'keys' }, K.map(k => h('button', { key: k, className: cls(k), onClick: () => d(k) }, k)))),
+    h('div', { className: 'card hist' },
+      h('h3', { className: 't' }, '🕘 History'),
+      s.hist.length ? s.hist.map((x, i) => h('p', { key: i }, x)) : h('p', null, 'No calculations yet 🌸'),
+      s.hist.length ? h('button', { onClick: () => d('CH') }, 'Clear') : null));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script></body></html>
